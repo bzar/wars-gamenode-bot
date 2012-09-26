@@ -1,53 +1,77 @@
 #!/usr/bin/node
 
+var settings = require("./src/settings");
 var gamenode = require("gamenode");
 var WebSocketClient = require("websocket").client;
 var Manager = require("./src/manager").Manager;
+var Handler = require("./src/handler").Handler;
 var SocketIO = require("./socketio").SocketIO;
 
-var io = new SocketIO();
+
+// Initialize bot state
+function initBot(client) {
+  client.stub.newSession({username: settings.username, password: settings.password}, function(result) {
+    client.stub.myGames(function(result) {
+      for(var i = 0; i < result.games.length; ++i) {
+        var game = result.games[i];
+        var handler = new Handler(client, game);
+        client.skeleton.handlers[game.gameId] = handler;
+        client.stub.subscribeGame(game.gameId, function(result) {
+          if(game.inTurn) {
+            handler.doTurn();
+          }
+        });
+      }
+    });
+  });
+}
 
 
-io.on("handshake", function(addr) {
-  var ws = new WebSocketClient();
+function connectToServer(host, port, callback) {
+  var io = new SocketIO();
 
-  ws.on("connectFailed", function(error) {
-    console.log("Connect Error: " + error.toString());
+  io.on("handshake", function(addr) {
+    var ws = new WebSocketClient();
+
+    ws.on("connectFailed", function(error) {
+      console.log("Connect Error: " + error.toString());
+    });
+
+    ws.on("connect", function(connection) {
+      connection.on("error", function(error) {
+        console.log("Connection Error: " + error.toString());
+      });
+      connection.on("close", function() {
+        console.log("Connection closed");
+      });
+      connection.on("message", function(message) {
+        console.log(message.utf8Data);
+        io.message(message.utf8Data);
+      });
+
+      io.on("send", function(message) {
+        connection.send(message);
+      });
+
+      var client = new gamenode.Client({crashOnError: true}, io, Manager);
+
+      io.on("message", function(message) {
+        client.handle(message);
+      });
+
+      client.debug = true;
+      client.onMethodListReceived = function() {
+        callback(client);
+      };
+
+      client.sendMethodListRequest();
+    });
+
+    console.log("Connecting to: " + addr);
+    ws.connect(addr);
   });
 
-  ws.on("connect", function(connection) {
-    connection.on("error", function(error) {
-      console.log("Connection Error: " + error.toString());
-    });
-    connection.on("close", function() {
-      console.log("Connection closed");
-    });
-    connection.on("message", function(message) {
-      console.log(message.utf8Data);
-      io.message(message.utf8Data);
-    });
+  io.handshake(host, port);
+}
 
-    io.on("send", function(message) {
-      connection.send(message);
-    });
-
-    var client = new gamenode.Client({crashOnError: true}, io, Manager);
-
-    io.on("message", function(message) {
-      client.handle(message);
-    });
-
-    client.debug = true;
-    client.onMethodListReceived = function() {
-      console.log("got method list");
-      client.skeleton.login();
-    };
-
-    client.sendMethodListRequest();
-  });
-
-  console.log("Connecting to: " + addr);
-  ws.connect(addr);
-});
-
-io.handshake("localhost", 8888);
+connectToServer(settings.server.host, settings.server.port, initBot);
