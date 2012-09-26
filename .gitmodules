@@ -1,0 +1,6 @@
+[submodule "node_modules/gamenode"]
+	path = node_modules/gamenode
+	url = https://github.com/bzar/gamenode.git
+[submodule "node_modules/websocket"]
+	path = node_modules/websocket
+	url = git://github.com/Worlize/WebSocket-Node.git
