@@ -4,21 +4,25 @@ var Bot = require("./bots/" + settings.bot).Bot;
 
 function Handler(client, gameInfo) {
   this.client = client;
-  var game = new Game(client, gameInfo);
-  var bot = new Bot(game);
 
-  this.bot = bot;
-  this.game = game;
+  this.bot = null;
+  this.game = null;
 
-  client.stub.subscribeGame(gameInfo.gameId, function(result) {
-    game.update(function(gameData) {
-      for(var i = 0; i < gameData.players.length; ++i) {
-        if(gameData.players[i].playerNumber == gameData.inTurnNumber) {
-          if(gameData.players[i].isMe) {
-            bot.doTurn();
+  var that = this;
+
+  client.stub.subscribeGame(gameInfo.gameId, function() {
+    client.stub.gameRules(gameInfo.gameId, function(rules) {
+      that.game = new Game(client, gameInfo, rules);
+      that.bot = new Bot(that.game);
+      that.game.update(function(gameData) {
+        for(var i = 0; i < gameData.players.length; ++i) {
+          if(gameData.players[i].playerNumber == gameData.inTurnNumber) {
+            if(gameData.players[i].isMe) {
+              that.bot.doTurn();
+            }
           }
         }
-      }
+      });
     });
   });
 };
@@ -38,15 +42,11 @@ Handler.prototype.gameFinished = function() {
 }
 
 Handler.prototype.gameTurnChange = function(newTurn, newRound, turnRemaining) {
-  console.log("gameTurnChange");
   for(var i = 0; i < this.game.data.players.length; ++i) {
     if(this.game.data.players[i].playerNumber == newTurn) {
-      console.log("found player");
       if(this.game.data.players[i].isMe) {
-        console.log("is me");
         var bot = this.bot;
         this.game.update(function(gameData) {
-          console.log("updated, doing turn");
           bot.doTurn();
         });
       }

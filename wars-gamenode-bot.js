@@ -40,8 +40,11 @@ function connectToServer(host, port, callback) {
         console.log("Connection closed");
       });
       connection.on("message", function(message) {
-        console.log(message.utf8Data);
-        io.message(message.utf8Data);
+        try {
+          io.message(message.utf8Data);
+        } catch(e) {
+          console.log(e);
+        }
       });
 
       io.on("send", function(message) {
@@ -51,7 +54,11 @@ function connectToServer(host, port, callback) {
       var client = new gamenode.Client({crashOnError: true}, io, Manager);
 
       io.on("message", function(message) {
-        client.handle(message);
+        try {
+          client.handle(message);
+        } catch(e) {
+          console.log(e);
+        }
       });
 
       client.debug = true;

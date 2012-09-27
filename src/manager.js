@@ -40,7 +40,6 @@ Manager.prototype.gameFinished = function(gameId) {
 }
 
 Manager.prototype.gameTurnChange = function(gameId, newTurn, newRound, turnRemaining) {
-  console.log("Manager.gameTurnChange");
   var handler = this.handlers[gameId];
   if(handler !== undefined) {
     handler.gameTurnChange(newTurn, newRound, turnRemaining);
