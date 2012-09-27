@@ -16,11 +16,6 @@ function initBot(client) {
         var game = result.games[i];
         var handler = new Handler(client, game);
         client.skeleton.handlers[game.gameId] = handler;
-        client.stub.subscribeGame(game.gameId, function(result) {
-          if(game.inTurn) {
-            handler.doTurn();
-          }
-        });
       }
     });
   });
