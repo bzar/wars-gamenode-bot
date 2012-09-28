@@ -57,8 +57,11 @@ Game.prototype.moveAndWait = function(x, y, dx, dy) {
 
   var src = this.getTile(x, y);
   var dst = this.getTile(dx, dy);
-  dst.unit = src.unit;
-  src.unit = null;
+
+  if(x != dx || y != dy) {
+    dst.unit = src.unit;
+    src.unit = null;
+  }
 
   this.client.stub.moveAndWait(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
   return true;
