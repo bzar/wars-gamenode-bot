@@ -11,15 +11,52 @@ function pick(arr) {
 Bot.prototype.doTurn = function() {
   for(var t = 0; t < this.game.data.tiles.length; ++t) {
     var tile = this.game.data.tiles[t];
-    if(tile.unit && tile.unit.owner == this.game.data.inTurnNumber && !tile.unit.moved) {
-      tile.unit.moved = true;
-      var opts = this.game.logic.unitMovementOptions(tile.x, tile.y);
-      if(!opts)
-        continue;
-
-      var dst = pick(opts);
-      this.game.moveAndWait(tile.x, tile.y, dst.pos.x, dst.pos.y);
+    var unit = tile.unit;
+    if(!unit || unit.owner != this.game.data.inTurnNumber || unit.moved) {
+      continue;
     }
+
+    var opts = this.game.logic.unitMovementOptions(tile.x, tile.y);
+    var dst = pick(opts).pos;
+
+    var attackOpts = this.game.logic.unitAttackOptions(tile.x, tile.y, dst.x, dst.y);
+
+    if(this.game.logic.unitCanCapture(tile.x, tile.y, dst.x, dst.y)) {
+      this.game.moveAndCapture(tile.x, tile.y, dst.x, dst.y);
+    } else if(attackOpts && attackOpts.length > 0) {
+      var attack = pick(attackOpts);
+      this.game.moveAndAttack(tile.x, tile.y, dst.x, dst.y, attack.pos.x, attack.pos.y);
+    } else if(this.game.logic.unitCanDeploy(tile.x, tile.y, dst.x, dst.y)) {
+      this.game.moveAndDeploy(tile.x, tile.y, dst.x, dst.y);
+    } else if(this.game.logic.unitCanUndeploy(tile.x, tile.y)) {
+      this.game.undeploy(tile.x, tile.y, dst.x, dst.y);
+    } else if(this.game.logic.unitCanLoadInto(tile.x, tile.y, dst.x, dst.y)) {
+      this.game.moveAndLoadInto(tile.x, tile.y, dst.x, dst.y);
+    } else if(this.game.logic.unitCanUnload(tile.x, tile.y, dst.x, dst.y)) {
+      var unloadUnit = pick(this.game.logic.unitUnloadOptions(tile.x, tile.y, dst.x, dst.y)).unitId;
+      var unloadTarget = pick(this.game.logic.unitUnloadTargetOptions(tile.x, tile.y, dst.x, dst.y, unloadUnit));
+      this.game.moveAndUnload(tile.x, tile.y, dst.x, dst.y, unloadTarget.x, unloadTarget.y, unloadUnit);
+    } else {
+      this.game.moveAndWait(tile.x, tile.y, dst.x, dst.y);
+    }
+
+    unit.moved = true;
+  }
+
+  for(var t = 0; t < this.game.data.tiles.length; ++t) {
+    var tile = this.game.data.tiles[t];
+    if(!this.game.logic.tileCanBuild(this.game.data.inTurnNumber, tile.x, tile.y)) {
+      continue;
+    }
+
+    var opts = this.game.logic.tileBuildOptions(tile.x, tile.y);
+    if(!opts || opts.length == 0) {
+      continue;
+    }
+
+    var unitType = pick(opts);
+
+    this.game.build(tile.x, tile.y, unitType.id);
   }
 
   this.game.endTurn();

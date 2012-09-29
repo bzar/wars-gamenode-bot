@@ -45,12 +45,46 @@ Game.prototype.getMapArray = function() {
   return mapArray;
 }
 
-Game.prototype.moveAndAttack = function() {
+Game.prototype.moveAndAttack = function(x, y, dx, dy, tx, ty) {
+ var path = this.logic.unitCanMoveTo(x, y, dx, dy)
+  if(!path) {
+    return false;
+  }
 
+  var attackOpts = this.logic.unitAttackOptions(x, y, dx, dy);
+  if(!attackOpts) {
+    return false;
+  }
+
+  var attack = attackOpts.filter(function(o) {
+    return o.pos.x == tx && o.pos.y == ty;
+  })[0];
+
+  if(!attack) {
+    return false;
+  }
+
+  var src = this.getTile(x, y);
+  var dst = this.getTile(dx, dy);
+  var target = this.getTile(tx, ty);
+
+  if(x != dx || y != dy) {
+    dst.unit = src.unit;
+    src.unit = null;
+  }
+
+  this.client.stub.moveAndAttack(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path, target.unit.unitId);
+
+  target.unit.health -= attack.power;
+  if(target.unit.health <= 0) {
+    target.unit = null;
+  }
+
+  return true;
 }
 
 Game.prototype.moveAndWait = function(x, y, dx, dy) {
-  var path = this.logic.unitCanMoveTo(x, y, dx, dy)
+ var path = this.logic.unitCanMoveTo(x, y, dx, dy)
   if(!path) {
     return false;
   }
@@ -67,32 +101,165 @@ Game.prototype.moveAndWait = function(x, y, dx, dy) {
   return true;
 }
 
-Game.prototype.moveAndCapture = function() {
+Game.prototype.moveAndCapture = function(x, y, dx, dy) {
+ var path = this.logic.unitCanMoveTo(x, y, dx, dy)
+  if(!path || !this.logic.unitCanCapture(x, y, dx, dy)) {
+    return false;
+  }
 
+  var src = this.getTile(x, y);
+  var dst = this.getTile(dx, dy);
+
+  if(x != dx || y != dy) {
+    dst.unit = src.unit;
+    src.unit = null;
+  }
+
+  dst.unit.capturing = true;
+  dst.capturePoints -= dst.unit.health;
+  if(dst.capturePoints <= 0) {
+    dst.owner = dst.unit.owner;
+    dst.capturePoints = 1;
+  }
+
+  this.client.stub.moveAndCapture(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
+  return true;
 }
 
-Game.prototype.moveAndDeploy = function() {
+Game.prototype.moveAndDeploy = function(x, y, dx, dy) {
+ var path = this.logic.unitCanMoveTo(x, y, dx, dy)
+  if(!path || !this.logic.unitCanDeploy(x, y, dx, dy)) {
+    return false;
+  }
 
+  var src = this.getTile(x, y);
+  var dst = this.getTile(dx, dy);
+
+  if(x != dx || y != dy) {
+    dst.unit = src.unit;
+    src.unit = null;
+  }
+
+  dst.unit.deployed = true;
+
+  this.client.stub.moveAndDeploy(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
+  return true;
 }
 
-Game.prototype.undeploy = function() {
+Game.prototype.undeploy = function(x, y) {
+ if(!this.logic.unitCanUndeploy(x, y)) {
+    return false;
+  }
+  var dst = this.getTile(x, y);
+  dst.unit.deployed = false;
 
+  this.client.stub.undeploy(this.info.gameId, dst.unit.unitId);
+  return true;
 }
 
-Game.prototype.moveAndLoadInto = function() {
+Game.prototype.moveAndLoadInto = function(x, y, dx, dy) {
+ var path = this.logic.unitCanMoveTo(x, y, dx, dy)
+  if(!path || !this.logic.unitCanLoadInto(x, y, dx, dy)) {
+    return false;
+  }
 
+  var src = this.getTile(x, y);
+  var dst = this.getTile(dx, dy);
+  var unit = src.unit;
+  dst.unit.carriedUnits.push(src.unit);
+  src.unit = null;
+
+  this.client.stub.moveAndLoadInto(this.info.gameId, unit.unitId, dst.unit.unitId, path);
+  return true;
 }
 
-Game.prototype.moveAndUnload = function() {
+Game.prototype.moveAndUnload = function(x, y, dx, dy, tx, ty, unitId) {
+ var path = this.logic.unitCanMoveTo(x, y, dx, dy)
+  if(!path) {
+    return false;
+  }
 
+  var unloadOpts = this.logic.unitUnloadOptions(x, y, dx, dy);
+  if(!unloadOpts || unloadOpts.length == 0) {
+    return false;
+  }
+
+  var canUnloadUnit = unloadOpts.filter(function(o) {
+    return o.unitId == unitId;
+  }).length > 0;
+
+  if(!canUnloadUnit) {
+    return false;
+  }
+
+  var unloadTargetOpts = this.logic.unitUnloadTargetOptions(x, y, dx, dy, unitId);
+  if(!unloadTargetOpts || unloadTargetOpts.length == 0) {
+    return false;
+  }
+
+  var canUnloadToTarget = unloadTargetOpts.filter(function(o) {
+    return o.x == tx && o.y == ty;
+  }).length > 0;
+
+  if(!canUnloadToTarget) {
+    return false;
+  }
+
+  var src = this.getTile(x, y);
+  var dst = this.getTile(dx, dy);
+  var target = this.getTile(tx, ty);
+
+  if(x != dx || y != dy) {
+    dst.unit = src.unit;
+    src.unit = null;
+  }
+
+  target.unit = dst.unit.carriedUnits.filter(function(u) {
+    return u.unitId == unitId;
+  })[0];
+
+  this.client.stub.moveAndUnload(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path, unitId, {x: tx, y: ty});
+
+  return true;
 }
 
-Game.prototype.build = function() {
+Game.prototype.build = function(x, y, unitTypeId) {
+ if(!this.logic.tileCanBuild(this.data.inTurnNumber, x, y)) {
+    return false;
+  }
 
+  var opts = this.logic.tileBuildOptions(x, y);
+  if(!opts || opts.length == 0) {
+    return false;
+  }
+
+  var canBuildUnit = opts.filter(function(o) {
+    return o.id == unitTypeId;
+  }).length > 0;
+
+  if(!canBuildUnit) {
+    return false;
+  }
+
+  var tile = this.getTile(x, y);
+  tile.unit = {
+    "unitId": null,
+    "tileId": tile.tileId,
+    "type": unitTypeId,
+    "owner": this.data.inTurnNumber,
+    "carriedBy": null,
+    "health": 100,
+    "deployed": false,
+    "moved": true,
+    "capturing": false,
+    "carriedUnits": []
+  };
+
+  this.client.stub.build(this.info.gameId, unitTypeId, {x: x, y: y});
 }
 
 Game.prototype.endTurn = function() {
-  this.client.stub.endTurn(this.info.gameId);
+ this.client.stub.endTurn(this.info.gameId);
 }
 
 Game.prototype.surrender = function() {
