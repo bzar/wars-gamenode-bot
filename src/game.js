@@ -5,6 +5,7 @@ function Game(client, info, rules) {
   this.info = info;
   this.data = null;
   this.logic = new GameLogic(this, rules);
+  this.rules = rules;
 }
 
 exports.Game = Game;
@@ -15,6 +16,14 @@ Game.prototype.update = function(cb) {
     that.data = result.game;
     if(cb) cb(that.data);
   });
+}
+
+Game.prototype.currentPlayer = function() {
+  for(var i = 0; i < this.data.players.length; ++i) {
+    if(this.data.players[i].playerNumber == this.data.inTurnNumber) {
+      return this.data.players[i];
+    }
+  }
 }
 
 Game.prototype.getTile = function(x, y) {
@@ -237,7 +246,9 @@ Game.prototype.build = function(x, y, unitTypeId) {
     return o.id == unitTypeId;
   }).length > 0;
 
-  if(!canBuildUnit) {
+  var unitType = this.rules.units[unitTypeId];
+  var player = this.currentPlayer();
+  if(!canBuildUnit || player.funds < unitType.price) {
     return false;
   }
 
@@ -254,6 +265,8 @@ Game.prototype.build = function(x, y, unitTypeId) {
     "capturing": false,
     "carriedUnits": []
   };
+
+  player.funds -= unitType.price;
 
   this.client.stub.build(this.info.gameId, unitTypeId, {x: x, y: y});
 }

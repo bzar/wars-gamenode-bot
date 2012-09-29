@@ -19,6 +19,8 @@ Bot.prototype.doTurn = function() {
     var opts = this.game.logic.unitMovementOptions(tile.x, tile.y);
     var dst = pick(opts).pos;
 
+    var actionOptions = []
+
     var attackOpts = this.game.logic.unitAttackOptions(tile.x, tile.y, dst.x, dst.y);
 
     if(this.game.logic.unitCanCapture(tile.x, tile.y, dst.x, dst.y)) {
@@ -49,12 +51,25 @@ Bot.prototype.doTurn = function() {
       continue;
     }
 
+    var funds = this.game.currentPlayer().funds;
+
     var opts = this.game.logic.tileBuildOptions(tile.x, tile.y);
+
     if(!opts || opts.length == 0) {
       continue;
     }
 
+    opts = opts.filter(function(o) {
+      return o.price <= funds;
+    });
+
+    opts.push(null);
+
     var unitType = pick(opts);
+
+    if(unitType === null) {
+      continue;
+    }
 
     this.game.build(tile.x, tile.y, unitType.id);
   }

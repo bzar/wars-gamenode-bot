@@ -14,8 +14,10 @@ function initBot(client) {
     client.stub.myGames(function(result) {
       for(var i = 0; i < result.games.length; ++i) {
         var game = result.games[i];
-        var handler = new Handler(client, game);
-        client.skeleton.handlers[game.gameId] = handler;
+        if(game.state != "finished") {
+          var handler = new Handler(client, game);
+          client.skeleton.handlers[game.gameId] = handler;
+        }
       }
     });
   });
