@@ -55,6 +55,5 @@ Handler.prototype.gameTurnChange = function(newTurn, newRound, turnRemaining) {
 }
 
 Handler.prototype.gameEvents = function(events) {
-  console.log(events);
 }
 

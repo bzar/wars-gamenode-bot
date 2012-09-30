@@ -1,4 +1,4 @@
 exports.server = {host: "localhost", port: 8888}
-exports.username = "bott";
-exports.password = "bott";
-exports.bot = "random"
+exports.username = "bzar";
+exports.password = "bzar";
+exports.bot = "mukaovela"

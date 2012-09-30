@@ -63,7 +63,7 @@ function connectToServer(host, port, callback) {
         }
       });
 
-      client.debug = true;
+      //client.debug = true;
       client.onMethodListReceived = function() {
         callback(client);
       };
