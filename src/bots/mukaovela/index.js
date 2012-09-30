@@ -79,6 +79,15 @@ Bot.prototype.doTurn = function() {
 
 Bot.prototype.doUnit = function(tile, unit) {
   var bestAction = {score: -Infinity};
+  var unitType = this.game.rules.units[unit.type];
+  var canCapture = false;
+  for(var f = 0; f < unitType.flags.length; ++f) {
+    var flag = this.game.rules.unitFlags[unitType.flags[f]];
+    if(flag.name == "Capture") {
+      canCapture = true;
+      break;
+    }
+  }
 
   var opts = this.game.logic.unitMovementOptions(tile.x, tile.y);
   for(var i = 0; i < opts.length; ++i) {
@@ -153,28 +162,43 @@ Bot.prototype.doUnit = function(tile, unit) {
 
     }
 */
-    var score = this.game.logic.getDistance(dst.x, dst.y, tile.x, tile.y);
+    if(bestAction.score < 0)
+    {
+      var score = this.game.logic.getDistance(dst.x, dst.y, tile.x, tile.y);
 
-    if(tileCanBuild && !neutralTile) {
-      score += ownTile ? -1000 : 1000;
-    }
+      if(tileCanBuild && !neutralTile) {
+        score += ownTile ? -1000 : 1000;
+      }
 
-    for(var t = 0; t < this.game.data.tiles.length; ++t) {
-      var tt = this.game.data.tiles[t];
-      var tType = this.game.rules.terrains[tt.type];
-      if(tt.owner != this.game.data.inTurnNumber && tType.buildTypes.length > 0) {
-        score -= this.game.logic.getDistance(tt.x, tt.y, dst.x, dst.y);
+      for(var t = 0; t < this.game.data.tiles.length; ++t) {
+        var tt = this.game.data.tiles[t];
+        var tType = this.game.rules.terrains[tt.type];
+        var isNeutral = tt.owner == 0;
+        var capturable = false;
+        for(var f = 0; f < tType.flags.length; ++f) {
+          var flag = this.game.rules.terrainFlags[tType.flags[f]];
+          if(flag.name == "Capturable") {
+            capturable = true;
+            break;
+          }
+        }
+
+        if(tt.owner != this.game.data.inTurnNumber && capturable) {
+          var distance = this.game.logic.getDistance(tt.x, tt.y, dst.x, dst.y);
+          var canBuild = tType.buildTypes.length > 0;
+          var importance = (canBuild ? 3 : 1)  * (canCapture ? 2 : 1) * (isNeutral ? 3 : 1);
+          score -= distance / importance;
+        }
+      }
+
+      if(score > bestAction.score) {
+        bestAction = {
+          score: score,
+          action: "move",
+          dst: dst
+        };
       }
     }
-
-    if(score > bestAction.score) {
-      bestAction = {
-        score: score,
-        action: "move",
-        dst: dst
-      };
-    }
-
   }
 
   if(bestAction.action == "capture") {
