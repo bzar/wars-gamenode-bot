@@ -1,5 +1,38 @@
+function BuildProfile(game) {
+  this.game = game;
+  this.effectivityMap = {};
+
+  for(targetTypeId in this.game.rules.units) {
+    var targetType = this.game.rules.units[targetTypeId];
+    var effectivities = [];
+    this.effectivityMap[targetType.id] = effectivities;
+    for(unitTypeId in this.game.rules.units) {
+      var unitType = this.game.rules.units[unitTypeId];
+      while(effectivities[unitTypeId] === undefined) {
+        effectivities.push(0);
+      }
+
+
+      if(unitType.primaryWeapon != null) {
+        var weapon = this.game.rules.weapons[unitType.primaryWeapon];
+        if(weapon.powerMap[targetType.armor]) {
+          effectivities[unitTypeId] += weapon.powerMap[targetType.armor] * targetType.price / unitType.price;
+        }
+      }
+
+      if(unitType.secondaryWeapon != null) {
+        var weapon = this.game.rules.weapons[unitType.secondaryWeapon];
+        if(weapon.powerMap[targetType.armor]) {
+          effectivities[unitTypeId] += weapon.powerMap[targetType.armor] * targetType.price / unitType.price;
+        }
+      }
+    }
+  }
+}
+
 function Bot(game) {
   this.game = game;
+  this.buildProfile = new BuildProfile(game);
 }
 
 exports.Bot = Bot;
@@ -20,33 +53,25 @@ Bot.prototype.doTurn = function() {
     this.doUnit(tile, unit);
   }
 
+  var buildTiles = [];
   for(var t = 0; t < this.game.data.tiles.length; ++t) {
     var tile = this.game.data.tiles[t];
     if(!this.game.logic.tileCanBuild(this.game.data.inTurnNumber, tile.x, tile.y)) {
       continue;
     }
 
-    var funds = this.game.currentPlayer().funds;
+    var threat = this.buildProfile.evaluateThreat(tile);
+    buildTiles.push({tile: tile, threat: threat});
+  }
 
-    var opts = this.game.logic.tileBuildOptions(tile.x, tile.y);
+  buildTiles.sort(function(a, b) {
+    return b.threat.total - a.threat.total;
+  });
 
-    if(!opts || opts.length == 0) {
-      continue;
-    }
-
-    opts = opts.filter(function(o) {
-      return o.price <= funds;
-    });
-
-    opts.push(null);
-
-    var unitType = pick(opts);
-
-    if(unitType === null) {
-      continue;
-    }
-
-    this.game.build(tile.x, tile.y, unitType.id);
+  for(var i = 0; i < buildTiles.length; ++i) {
+    var tile = buildTiles[i].tile;
+    var unitType = this.buildProfile.chooseUnitToBuild(tile);
+    this.game.build(tile.x, tile.y, unitType);
   }
 
   this.game.endTurn();
@@ -60,6 +85,7 @@ Bot.prototype.doUnit = function(tile, unit) {
     var dst = opts[i].pos;
     var dstTile = this.game.getTile(dst.x, dst.y);
     var ownTile = dstTile.owner == this.game.data.inTurnNumber;
+    var neutralTile = dstTile.owner == 0;
     var tileCanBuild = this.game.rules.terrains[dstTile.type].buildTypes.length > 0;
 
     var attackOpts = this.game.logic.unitAttackOptions(tile.x, tile.y, dst.x, dst.y);
@@ -96,7 +122,7 @@ Bot.prototype.doUnit = function(tile, unit) {
       unit.deployed = true;
       var potentialAttacks = this.game.logic.unitAttackOptions(tile.x, tile.y, dst.x, dst.y).length;
       var score = potentialAttacks > 0 ? potentialAttacks : -2000;
-      if(tileCanBuild) {
+      if(tileCanBuild && !neutralTile) {
         score += ownTile ? -2000 : 2000;
       }
       if(score > bestAction.score) {
@@ -129,7 +155,7 @@ Bot.prototype.doUnit = function(tile, unit) {
 */
     var score = this.game.logic.getDistance(dst.x, dst.y, tile.x, tile.y);
 
-    if(tileCanBuild) {
+    if(tileCanBuild && !neutralTile) {
       score += ownTile ? -1000 : 1000;
     }
 
@@ -151,8 +177,6 @@ Bot.prototype.doUnit = function(tile, unit) {
 
   }
 
-  console.log("best action");
-  console.log(bestAction);
   if(bestAction.action == "capture") {
     this.game.moveAndCapture(tile.x, tile.y, bestAction.dst.x, bestAction.dst.y);
   } else if(bestAction.action == "attack") {
@@ -170,4 +194,80 @@ Bot.prototype.doUnit = function(tile, unit) {
   }
 
   unit.moved = true;
+}
+
+BuildProfile.prototype.evaluateThreat = function(tile) {
+  var enemies = [];
+  for(var t = 0; t < this.game.data.tiles.length; ++t) {
+    var tt = this.game.data.tiles[t];
+    if(tt.unit !== null && tt.unit.owner != this.game.data.inTurnNumber) {
+      while(enemies[tt.unit.type] === undefined) {
+        enemies.push(0);
+      }
+      enemies[tt.unit.type] += 1.0 / this.game.logic.getDistance(tile.x, tile.y, tt.x, tt.y);
+    }
+  }
+
+  var totalThreat = 0;
+  for(var i = 0; i < enemies.length; ++i) {
+    totalThreat += enemies[i];
+  }
+
+  return {total: totalThreat, byType: enemies};
+}
+BuildProfile.prototype.chooseUnitToBuild = function(tile) {
+  var threat = this.evaluateThreat(tile);
+
+  var threatToCounterValue = Math.random() * threat.total;
+  var threatToCounter = 0;
+  for(var i = 0; i < threat.byType.length; ++i) {
+    threatToCounterValue -= threat.byType[i];
+    if(threatToCounterValue <= 0) {
+      threatToCounter = i;
+      break;
+    }
+  };
+
+  var unitEffectivities = this.effectivityMap[threatToCounter];
+  var effectivities = [];
+  for(e in unitEffectivities) {
+    effectivities.push({unitType: e, effectivity: unitEffectivities[e]});
+  }
+
+  effectivities.sort(function(a, b) {
+    return b.effectivity - a.effectivity;
+  });
+
+  var opts = this.game.logic.tileBuildOptions(tile.x, tile.y);
+  var funds = this.game.currentPlayer().funds;
+
+  opts = opts.filter(function(o) {
+    return o.price <= funds;
+  });
+
+  effectivities.filter(function(e) {
+    for(var i = 0; i < opts.length; ++i) {
+      if(opts[i].type == e.unitType) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  var totalEffectivity = 0;
+  for(var i = 0; i < effectivities.length; ++i) {
+    totalEffectivity += effectivities[i].effectivity;
+  }
+
+  var unitTypeValue = Math.random() * totalEffectivity;
+  var unitType = 0;
+  for(var i = 0; i < effectivities.length; ++i) {
+    unitTypeValue -= effectivities[i].effectivity;
+    if(unitTypeValue <= 0) {
+      unitType = effectivities[i].unitType;
+      break;
+    }
+  };
+
+  return unitType;
 }
