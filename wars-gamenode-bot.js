@@ -15,8 +15,8 @@ function initBot(client) {
       for(var i = 0; i < result.games.length; ++i) {
         var game = result.games[i];
         if(game.state != "finished") {
-          var handler = new Handler(client, game);
-          client.skeleton.handlers[game.gameId] = handler;
+          console.log("adding game id=" + game.gameId);
+          client.skeleton.local.addGame(game.gameId);
         }
       }
     });
@@ -63,7 +63,7 @@ function connectToServer(host, port, callback) {
         }
       });
 
-      client.debug = true;
+      //client.debug = true;
       client.onMethodListReceived = function() {
         callback(client);
       };

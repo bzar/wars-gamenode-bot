@@ -2,25 +2,23 @@ var settings = require("./settings");
 var Game = require("./game").Game;
 var Bot = require("./bots/" + settings.bot).Bot;
 
-function Handler(client, gameInfo) {
+function Handler(client, gameId, playerNumber) {
   this.client = client;
+  this.playerNumber = playerNumber;
 
   this.bot = null;
   this.game = null;
 
   var that = this;
 
-  client.stub.subscribeGame(gameInfo.gameId, function() {
-    client.stub.gameRules(gameInfo.gameId, function(rules) {
-      that.game = new Game(client, gameInfo, rules);
-      that.bot = new Bot(that.game);
+
+  client.stub.subscribeGame(gameId, function() {
+    client.stub.gameRules(gameId, function(rules) {
+      that.game = new Game(client, gameId, rules);
+      that.bot = new Bot(that.game, playerNumber);
       that.game.update(function(gameData) {
-        for(var i = 0; i < gameData.players.length; ++i) {
-          if(gameData.players[i].playerNumber == gameData.inTurnNumber) {
-            if(gameData.players[i].isMe) {
-              that.bot.doTurn();
-            }
-          }
+        if(gameData.inTurnNumber == playerNumber) {
+          that.bot.doTurn();
         }
       });
     });
@@ -36,21 +34,25 @@ Handler.prototype.playerLeft = function(playerNumber) {
 }
 
 Handler.prototype.gameStarted = function() {
+  var that = this;
+  that.game.update(function(gameData) {
+    if(gameData.inTurnNumber == that.playerNumber) {
+      setTimeout( function() {
+        that.bot.doTurn();
+      }, 1000);
+    }
+  });
 }
 
 Handler.prototype.gameFinished = function() {
 }
 
 Handler.prototype.gameTurnChange = function(newTurn, newRound, turnRemaining) {
-  for(var i = 0; i < this.game.data.players.length; ++i) {
-    if(this.game.data.players[i].playerNumber == newTurn) {
-      if(this.game.data.players[i].isMe) {
-        var bot = this.bot;
-        this.game.update(function(gameData) {
-          bot.doTurn();
-        });
-      }
-    }
+  if(newTurn == this.playerNumber) {
+    var bot = this.bot;
+    this.game.update(function(gameData) {
+      bot.doTurn();
+    });
   }
 }
 

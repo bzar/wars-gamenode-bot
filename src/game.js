@@ -1,8 +1,8 @@
 var GameLogic = require("./GameLogic").GameLogic;
 
-function Game(client, info, rules) {
+function Game(client, gameId, rules) {
   this.client = client;
-  this.info = info;
+  this.gameId = gameId;
   this.data = null;
   this.logic = new GameLogic(this, rules);
   this.rules = rules;
@@ -12,7 +12,7 @@ exports.Game = Game;
 
 Game.prototype.update = function(cb) {
   var that = this;
-  this.client.stub.gameData(this.info.gameId, function(result) {
+  this.client.stub.gameData(this.gameId, function(result) {
     that.data = result.game;
     if(cb) cb(that.data);
   });
@@ -82,7 +82,7 @@ Game.prototype.moveAndAttack = function(x, y, dx, dy, tx, ty) {
     src.unit = null;
   }
 
-  this.client.stub.moveAndAttack(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path, target.unit.unitId);
+  this.client.stub.moveAndAttack(this.gameId, dst.unit.unitId, {x: dx, y: dy}, path, target.unit.unitId);
 
   target.unit.health -= attack.power;
   if(target.unit.health <= 0) {
@@ -106,7 +106,7 @@ Game.prototype.moveAndWait = function(x, y, dx, dy) {
     src.unit = null;
   }
 
-  this.client.stub.moveAndWait(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
+  this.client.stub.moveAndWait(this.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
   return true;
 }
 
@@ -131,7 +131,7 @@ Game.prototype.moveAndCapture = function(x, y, dx, dy) {
     dst.capturePoints = 1;
   }
 
-  this.client.stub.moveAndCapture(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
+  this.client.stub.moveAndCapture(this.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
   return true;
 }
 
@@ -151,7 +151,7 @@ Game.prototype.moveAndDeploy = function(x, y, dx, dy) {
 
   dst.unit.deployed = true;
 
-  this.client.stub.moveAndDeploy(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
+  this.client.stub.moveAndDeploy(this.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
   return true;
 }
 
@@ -162,7 +162,7 @@ Game.prototype.undeploy = function(x, y) {
   var dst = this.getTile(x, y);
   dst.unit.deployed = false;
 
-  this.client.stub.undeploy(this.info.gameId, dst.unit.unitId);
+  this.client.stub.undeploy(this.gameId, dst.unit.unitId);
   return true;
 }
 
@@ -178,7 +178,7 @@ Game.prototype.moveAndLoadInto = function(x, y, dx, dy) {
   dst.unit.carriedUnits.push(src.unit);
   src.unit = null;
 
-  this.client.stub.moveAndLoadInto(this.info.gameId, unit.unitId, dst.unit.unitId, path);
+  this.client.stub.moveAndLoadInto(this.gameId, unit.unitId, dst.unit.unitId, path);
   return true;
 }
 
@@ -227,7 +227,7 @@ Game.prototype.moveAndUnload = function(x, y, dx, dy, tx, ty, unitId) {
     return u.unitId == unitId;
   })[0];
 
-  this.client.stub.moveAndUnload(this.info.gameId, dst.unit.unitId, {x: dx, y: dy}, path, unitId, {x: tx, y: ty});
+  this.client.stub.moveAndUnload(this.gameId, dst.unit.unitId, {x: dx, y: dy}, path, unitId, {x: tx, y: ty});
 
   return true;
 }
@@ -268,11 +268,11 @@ Game.prototype.build = function(x, y, unitTypeId) {
 
   player.funds -= unitType.price;
 
-  this.client.stub.build(this.info.gameId, unitTypeId, {x: x, y: y});
+  this.client.stub.build(this.gameId, unitTypeId, {x: x, y: y});
 }
 
 Game.prototype.endTurn = function() {
- this.client.stub.endTurn(this.info.gameId);
+ this.client.stub.endTurn(this.gameId);
 }
 
 Game.prototype.surrender = function() {

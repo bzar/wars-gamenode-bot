@@ -30,9 +30,10 @@ function BuildProfile(game) {
   }
 }
 
-function Bot(game) {
+function Bot(game, playerNumber) {
   this.game = game;
   this.buildProfile = new BuildProfile(game);
+  this.playerNumber = playerNumber;
 }
 
 exports.Bot = Bot;
@@ -46,7 +47,7 @@ Bot.prototype.doTurn = function() {
   for(var t = 0; t < this.game.data.tiles.length; ++t) {
     var tile = this.game.data.tiles[t];
     var unit = tile.unit;
-    if(!unit || unit.owner != this.game.data.inTurnNumber || unit.moved) {
+    if(!unit || unit.owner != this.playerNumber || unit.moved) {
       continue;
     }
 
@@ -56,7 +57,7 @@ Bot.prototype.doTurn = function() {
   var buildTiles = [];
   for(var t = 0; t < this.game.data.tiles.length; ++t) {
     var tile = this.game.data.tiles[t];
-    if(!this.game.logic.tileCanBuild(this.game.data.inTurnNumber, tile.x, tile.y)) {
+    if(!this.game.logic.tileCanBuild(this.playerNumber, tile.x, tile.y)) {
       continue;
     }
 
@@ -93,7 +94,7 @@ Bot.prototype.doUnit = function(tile, unit) {
   for(var i = 0; i < opts.length; ++i) {
     var dst = opts[i].pos;
     var dstTile = this.game.getTile(dst.x, dst.y);
-    var ownTile = dstTile.owner == this.game.data.inTurnNumber;
+    var ownTile = dstTile.owner == this.playerNumber;
     var neutralTile = dstTile.owner == 0;
     var tileCanBuild = this.game.rules.terrains[dstTile.type].buildTypes.length > 0;
 
@@ -183,7 +184,7 @@ Bot.prototype.doUnit = function(tile, unit) {
           }
         }
 
-        if(tt.owner != this.game.data.inTurnNumber && capturable) {
+        if(tt.owner != this.playerNumber && capturable) {
           var distance = this.game.logic.getDistance(tt.x, tt.y, dst.x, dst.y);
           var canBuild = tType.buildTypes.length > 0;
           var importance = (canBuild ? 3 : 1)  * (canCapture ? 2 : 1) * (isNeutral ? 3 : 1);
@@ -224,7 +225,7 @@ BuildProfile.prototype.evaluateThreat = function(tile) {
   var enemies = [];
   for(var t = 0; t < this.game.data.tiles.length; ++t) {
     var tt = this.game.data.tiles[t];
-    if(tt.unit !== null && tt.unit.owner != this.game.data.inTurnNumber) {
+    if(tt.unit !== null && tt.unit.owner != this.playerNumber) {
       while(enemies[tt.unit.type] === undefined) {
         enemies.push(0);
       }

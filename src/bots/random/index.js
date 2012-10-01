@@ -1,5 +1,6 @@
-function Bot(game) {
+function Bot(game, playerNumber) {
   this.game = game;
+  this.playerNumber = playerNumber;
 }
 
 exports.Bot = Bot;
@@ -12,7 +13,7 @@ Bot.prototype.doTurn = function() {
   for(var t = 0; t < this.game.data.tiles.length; ++t) {
     var tile = this.game.data.tiles[t];
     var unit = tile.unit;
-    if(!unit || unit.owner != this.game.data.inTurnNumber || unit.moved) {
+    if(!unit || unit.owner != this.playerNumber || unit.moved) {
       continue;
     }
 
@@ -47,7 +48,7 @@ Bot.prototype.doTurn = function() {
 
   for(var t = 0; t < this.game.data.tiles.length; ++t) {
     var tile = this.game.data.tiles[t];
-    if(!this.game.logic.tileCanBuild(this.game.data.inTurnNumber, tile.x, tile.y)) {
+    if(!this.game.logic.tileCanBuild(this.playerNumber, tile.x, tile.y)) {
       continue;
     }
 
