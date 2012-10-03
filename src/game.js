@@ -54,6 +54,61 @@ Game.prototype.getMapArray = function() {
   return mapArray;
 }
 
+Game.prototype.getTiles = function(conditions) {
+  if(conditions === undefined) {
+    conditions = {};
+  }
+
+  var result = [];
+
+  for(var i = 0; i < this.data.tiles.length; ++i) {
+    var tile = this.data.tiles[i];
+    var terrain = this.rules.terrains[tile.type];
+
+    if(conditions.canBuild !== undefined && (terrain.buildTypes.length !== 0) !== conditions.canBuild) {
+      continue;
+    }
+
+    if(conditions.owner !== undefined && tile.owner !== conditions.owner) {
+      continue;
+    }
+
+    if(conditions.notOwner !== undefined && tile.owner === conditions.owner) {
+      continue;
+    }
+
+    if(conditions.capturable !== undefined) {
+      var isCapturable = false;
+      for(var j = 0; j < terrain.flags.length; ++j) {
+        if(this.rules.terrainFlags[terrain.flags[j]].name == "Capturable") {
+          isCapturable = true;
+          break;
+        }
+      }
+
+      if(isCapturable != conditions.capturable) {
+        continue;
+      }
+    }
+
+    if(conditions.hasUnit !== undefined && (tile.unit !== null) !== conditions.hasUnit) {
+      continue;
+    }
+
+    if(conditions.unitOwner !== undefined && tile.unit !== null && tile.unit.owner !== conditions.unitOwner) {
+      continue;
+    }
+
+    if(conditions.notUnitOwner !== undefined && tile.unit !== null && tile.unit.owner === conditions.notUnitOwner) {
+      continue;
+    }
+
+    result.push(tile);
+  }
+
+  return result;
+}
+
 Game.prototype.moveAndAttack = function(x, y, dx, dy, tx, ty) {
  var path = this.logic.unitCanMoveTo(x, y, dx, dy)
   if(!path) {
