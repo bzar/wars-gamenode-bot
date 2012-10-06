@@ -3,47 +3,208 @@ class Bot
     @buildProfile = new BuildProfile(@game)
 
   doTurn: ->
+    console.log "doTurn"
+    self = this
     this.doUnit tile, tile.unit for tile in @game.getTiles(unitOwner: @playerNumber)
     buildTiles = @game.getTiles(canBuild: true, owner: @playerNumber, hasUnit: false)
-    buildTilesWithThreats = ({tile: tile, threat: calculateTotalThreat(evaluateThreats(tile, @playerNumber, @game))} for tile in buildTiles)
+    tileThreat = (tile) -> sum(self.evaluateThreats(tile), (t) -> t.threat)
+    buildTilesWithThreats = ({tile: tile, threat: tileThreat(tile)} for tile in buildTiles)
     buildTilesWithThreats.sort((a, b) -> b.threat - a.threat)
     this.doBuild t.tile for t in buildTilesWithThreats
 
     @game.endTurn()
 
-  doUnit: (tile, unit) -> #console.log "unit"
+  doUnit: (tile, unit) ->
+    console.log "doUnit"
+    destinations = (@game.getTile(o.pos.x, o.pos.y) for o in @game.logic.unitMovementOptions(tile.x, tile.y))
+    actions = (this.findBestUnitAction(unit, tile, destination) for destination in destinations)
+    console.log actions
+    actionsWithoutMoves = (a for a in actions when a.action != "move")
+    actions = actionsWithoutMoves if actionsWithoutMoves.length > 0
+    action = pickMax(actions, (a) -> a.score)
+    this.performUnitAction(unit, tile, action)
 
   doBuild: (tile) ->
     console.log "doBuild"
-    threats = evaluateThreats(tile, @playerNumber, @game)
-    console.log threats
-    threatToCounter = pickWeightedRandom(threats, (threat) -> threat)
-    console.log threatToCounter
-    efficiencies = @buildProfile.getEfficiencies(threatToCounter)
-    console.log efficiencies
+    threats = this.evaluateThreats(tile)
     buildOptions = @game.logic.tileBuildOptions(tile.x, tile.y)
     potentialUnits = (t.id for t in buildOptions when t.price <= @game.currentPlayer().funds)
-    console.log potentialUnits
-    potentialUnitsWithEfficiencies = (e for e in efficiencies when e.unitTypeId in potentialUnits)
-    console.log potentialUnitsWithEfficiencies
-    unitToBuildIndex = pickWeightedRandom(potentialUnitsWithEfficiencies, (e) -> e.efficiency) if potentialUnits.length > 0
-    console.log unitToBuildIndex
-    unitToBuild = efficiencies[unitToBuildIndex].unitTypeId if unitToBuildIndex?
-    console.log unitToBuild
-    @game.build(tile.x, tile.y, unitToBuild) if unitToBuild?
 
+    if potentialUnits.length > 0
+      unitToBuild = potentialUnits[Math.floor(Math.random() * potentialUnits.length)]
+      if threats.length > 0
+        threatToCounter = pickWeightedRandom(threats, (t) -> t)
+        efficiencies = @buildProfile.getEfficiencies(threatToCounter)
+        potentialUnitsWithEfficiencies = (e for e in efficiencies when e.unitTypeId in potentialUnits and e.efficiency > 0.5)
+        console.log potentialUnitsWithEfficiencies
+        unitToBuildIndex = pickWeightedRandom(potentialUnitsWithEfficiencies, (e) -> e.efficiency) if potentialUnits.length > 0
+        unitToBuild = efficiencies[unitToBuildIndex].unitTypeId if unitToBuildIndex?
+      @game.build(tile.x, tile.y, unitToBuild) if unitToBuild?
+
+
+  evaluateThreats: (targetTile) ->
+    console.log "evaluateThreats"
+    threats = {}
+    game = @game
+    for tile in @game.getTiles(notUnitOwner: @playerNumber)
+      do (tile) ->
+        threats[tile.unit.type] = 0 if not threats[tile.unit.type]?
+        threats[tile.unit.type] += 1 / game.logic.getDistance(targetTile.x, targetTile.y, tile.x, tile.y)
+
+    return threats
+
+  findBestUnitAction: (unit, src, dst) ->
+    console.log "findBestUnitAction"
+    unitType = @game.rules.units[unit.type]
+    dstTerrain = @game.rules.terrains[dst.type]
+    canCapture = @game.unitTypeHasFlag(unitType, "Capture")
+    ownTile = dst.owner == @playerNumber
+    neutralTile = dst.owner == 0
+    enemyTile = not ownTile and not neutralTile
+    buildTile = @game.terrainCanBuild(dstTerrain)
+    attacks = @game.logic.unitAttackOptions(src.x, src.y, dst.x, dst.y)
+
+    bestAction = {score: -Infinity}
+
+
+    if @game.logic.unitCanCapture(src.x, src.y, dst.x, dst.y)
+      toCapture = @game.getTile(src.x, src.y)
+      score = 200 - (toCapture.capturePoints - unit.health)
+      score *= 100
+      if score > bestAction.score
+        bestAction = {
+          score: score,
+          dst: dst,
+          action: "capture"
+        }
+
+    console.log(attacks)
+    if attacks? and attacks.length > 0
+      console.log "attacking"
+      bestAttack = pickMax(attacks, (a) -> a.power)
+      targetUnit = @game.getTile(bestAttack.pos.x, bestAttack.pos.y).unit
+      targetUnitType = @game.rules.units[targetUnit.type]
+      score = bestAttack.power * targetUnitType.price
+      if score > bestAction.score
+        bestAction = {
+          score: score,
+          dst: dst,
+          action: "attack",
+          target: bestAttack.pos
+        }
+
+
+    if @game.logic.unitCanDeploy(src.x, src.y, dst.x, dst.y)
+      unit.deployed = true
+      potentialAttacks = @game.logic.unitAttackOptions(src.x, src.y, dst.x, dst.y).length
+      score = potentialAttacks - 1
+
+      if buildTile and not neutralTile
+        score += if ownTile then -2000 else 2000
+
+      if score > bestAction.score
+        bestAction = {
+          score: score,
+          dst: dst,
+          action: "deploy"
+        }
+
+      unit.deployed = false
+
+    if @game.logic.unitCanUndeploy(src.x, src.y)
+      score = -attacks.length
+      if score > bestAction.score
+        bestAction = {
+          score: score,
+          action: "undeploy"
+        }
+
+
+    ###
+    if(@game.logic.unitCanLoadInto(src.x, src.y, dst.x, dst.y)) {
+
+    }
+
+    if(@game.logic.unitCanUnload(src.x, src.y, dst.x, dst.y)) {
+
+    }
+    ###
+    console.log bestAction
+    if bestAction.score < 0
+      console.log "moving"
+      game = @game
+      playerNumber = @playerNumber
+
+      scoreTile = (tile) ->
+        terrain = game.rules.terrains[tile.type]
+        score = if tile.owner == playerNumber and (not tile.unit? or tile.unit.owner == playerNumber) then -10 else 10
+        score *= if tile.unit? and tile.unit.owner == playerNumber and tile.beingCaptured then 0 else 1
+        score = score * 2 if tile.owner == 0 and canCapture
+        score = score * 2 if game.terrainCanBuild(terrain)
+        distance = game.logic.getDistance(tile.x, tile.y, dst.x, dst.y)
+        distance = 1 if distance == 0
+        return {tile: tile, distance: distance, score: score}
+
+      importantTiles = (scoreTile(tile) for tile in @game.getTiles(capturable: true))
+      totalDistance = sum(importantTiles, (t) -> t.distance)
+      score = sum((t.score * totalDistance / t.distance) for t in importantTiles)
+      score = 0.01 * score if not canCapture and neutralTile
+      score = 0.01 * score if ownTile and buildTile
+      #console.log dst.x + " " + dst.y + ": " + score
+
+      if score > bestAction.score
+        bestAction = {
+          score: score,
+          action: "move",
+          dst: dst
+        }
+
+
+    console.log "best action:"
+    console.log bestAction
+    return bestAction
+
+  performUnitAction: (unit, tile, action) ->
+    console.log "performUnitAction"
+    switch action.action
+      when "capture"  then @game.moveAndCapture(tile.x, tile.y, action.dst.x, action.dst.y)
+      when "attack"   then @game.moveAndAttack(tile.x, tile.y, action.dst.x,action. dst.y, action.target.x, action.target.y)
+      when "deploy"   then @game.moveAndDeploy(tile.x, tile.y, action.dst.x, action.dst.y)
+      when "undeploy" then @game.undeploy(tile.x, tile.y)
+      when "load"     then @game.moveAndLoadInto(tile.x, tile.y, action.dst.x, action.dst.y)
+      when "unload"   then @game.moveAndUnload(tile.x, tile.y, action.dst.x, action.dst.y, action.target.x, action.target.y)
+      when "move"     then @game.moveAndWait(tile.x, tile.y, action.dst.x, action.dst.y)
+
+    unit.moved = true
 
 exports.Bot = Bot
 
 #----------------------------------------------------------------------------#
 
+sum = (values, getFunction) ->
+  total = 0
+  for value in values
+    do (value) ->
+      if getFunction?
+        total += getFunction(value)
+      else
+        total += value
+  return total
+
+pickMax = (values, weightingFunction) ->
+  result = null
+  maxWeight = -Infinity
+  for value in values
+    do (value) ->
+      w = weightingFunction(value)
+      if w > maxWeight
+        maxWeight = w
+        result = value
+
+  return result
 
 pickWeightedRandom = (values, weightingFunction) ->
-  totalWeight = 0
-
-  for key, value of values
-    do (value) -> totalWeight += weightingFunction(value)
-
+  totalWeight = sum((v for k, v of values), weightingFunction)
   randomWeight = Math.random() * totalWeight
   randomKey = null
 
@@ -54,36 +215,6 @@ pickWeightedRandom = (values, weightingFunction) ->
 
   return randomKey
 
-getUnitTiles = (game, playerNumber) ->
-  ({tile: tile, unit: tile.unit} for tile in game.data.tiles when tile.unit? and
-    not tile.unit.moved and tile.unit.owner == playerNumber)
-
-getEnemyTiles = (game, playerNumber) ->
-  ({tile: tile, enemy: tile.unit} for tile in game.data.tiles when tile.unit? and
-    tile.unit.owner != playerNumber)
-
-getBuildTiles = (game, playerNumber) ->
-  (tile for tile in game.data.tiles when not tile.unit? and
-    tile.owner == playerNumber and
-    game.rules.terrains[tile.type].buildTypes.length > 0)
-
-evaluateThreats = (targetTile, playerNumber, game) ->
-  enemies = getEnemyTiles(game, playerNumber)
-  threats = {}
-  for {tile, enemy} in enemies
-    do (tile, enemy) ->
-      threats[enemy.type] = 0 if not threats[enemy.type]?
-      threats[enemy.type] += 1 / game.logic.getDistance(targetTile.x, targetTile.y, tile.x, tile.y);
-
-  return threats;
-
-calculateTotalThreat = (threats) ->
-  total = 0
-
-  for unitType, threat of threats
-    do (threat) -> total += threat
-
-  return total
 
 class BuildProfile
   constructor: (@game) ->
@@ -91,15 +222,17 @@ class BuildProfile
     weapons = @game.rules.weapons
 
     getPower = (weaponId, armorId) ->
-      power = weapons[weaponId]?.powerMap[armorId]
-      power = 1 if not power? or power == 0
+      weapon = weapons[weaponId]
+      power = weapon?.powerMap[armorId]
+      power = 0 if not power?
+      power = power/2 if weapon?.requireDeployed
       return power
 
     getMaxPower = (attackerType, targetType) ->
       primaryPower = getPower(attackerType.primaryWeapon, targetType.armor)
       secondaryPower = getPower(attackerType.secondaryWeapon, targetType.armor)
       return if primaryPower > secondaryPower then primaryPower else secondaryPower
-      maxPower
+
 
     getEfficiency = (attackerTypeId, targetTypeId) ->
       attackerType = unitTypes[attackerTypeId]
@@ -107,6 +240,7 @@ class BuildProfile
 
       attackerPower = getMaxPower(attackerType, targetType)
       targetPower = getMaxPower(targetType, attackerType)
+      targetPower = 1 if targetPower == 0
 
       return (attackerPower * targetType.price) / (targetPower * attackerType.price)
 

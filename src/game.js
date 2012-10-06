@@ -73,7 +73,7 @@ Game.prototype.getTiles = function(conditions) {
       continue;
     }
 
-    if(conditions.notOwner !== undefined && tile.owner === conditions.owner) {
+    if(conditions.notOwner !== undefined && tile.owner === conditions.notOwner) {
       continue;
     }
 
@@ -95,11 +95,11 @@ Game.prototype.getTiles = function(conditions) {
       continue;
     }
 
-    if(conditions.unitOwner !== undefined && tile.unit !== null && tile.unit.owner !== conditions.unitOwner) {
+    if(conditions.unitOwner !== undefined && (tile.unit === null || tile.unit.owner !== conditions.unitOwner)) {
       continue;
     }
 
-    if(conditions.notUnitOwner !== undefined && tile.unit !== null && tile.unit.owner === conditions.notUnitOwner) {
+    if(conditions.notUnitOwner !== undefined && (tile.unit === null || tile.unit.owner === conditions.notUnitOwner)) {
       continue;
     }
 
@@ -107,6 +107,32 @@ Game.prototype.getTiles = function(conditions) {
   }
 
   return result;
+}
+
+Game.prototype.unitTypeHasFlag = function(unitType, flagName) {
+  for(var i = 0; i < unitType.flags.length; ++i) {
+    var flag = this.rules.unitFlags[unitType.flags[i]];
+    if(flag.name === flagName) {
+      return true;
+    }
+
+    return false;
+  }
+}
+
+Game.prototype.terrainHasFlag = function(terrain, flagName) {
+  for(var i = 0; i < terrain.flags.length; ++i) {
+    var flag = this.rules.terrainFlags[terrain.flags[i]];
+    if(flag.name === flagName) {
+      return true;
+    }
+
+    return false;
+  }
+}
+
+Game.prototype.terrainCanBuild = function(terrain) {
+  return terrain.buildTypes.length > 0;
 }
 
 Game.prototype.moveAndAttack = function(x, y, dx, dy, tx, ty) {
@@ -184,8 +210,10 @@ Game.prototype.moveAndCapture = function(x, y, dx, dy) {
   if(dst.capturePoints <= 0) {
     dst.owner = dst.unit.owner;
     dst.capturePoints = 1;
+    dst.beingCaptured = false;
+  } else {
+    dst.beingCaptured = true;
   }
-
   this.client.stub.moveAndCapture(this.gameId, dst.unit.unitId, {x: dx, y: dy}, path);
   return true;
 }

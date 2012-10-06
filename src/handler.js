@@ -18,7 +18,12 @@ function Handler(client, gameId, playerNumber) {
       that.bot = new Bot(that.game, playerNumber);
       that.game.update(function(gameData) {
         if(gameData.inTurnNumber == playerNumber) {
-          that.bot.doTurn();
+          try {
+            that.bot.doTurn();
+          } catch(e) {
+            console.log(e);
+            throw e;
+          }
         }
       });
     });
@@ -38,7 +43,12 @@ Handler.prototype.gameStarted = function() {
   that.game.update(function(gameData) {
     if(gameData.inTurnNumber == that.playerNumber) {
       setTimeout( function() {
-        that.bot.doTurn();
+        try {
+          that.bot.doTurn();
+        } catch(e) {
+          console.log(e);
+          throw e;
+        }
       }, 1000);
     }
   });
@@ -48,10 +58,16 @@ Handler.prototype.gameFinished = function() {
 }
 
 Handler.prototype.gameTurnChange = function(newTurn, newRound, turnRemaining) {
+  var that = this;
   if(newTurn == this.playerNumber) {
     var bot = this.bot;
     this.game.update(function(gameData) {
-      bot.doTurn();
+      try {
+        that.bot.doTurn();
+      } catch(e) {
+        console.log(e);
+        throw e;
+      }
     });
   }
 }
