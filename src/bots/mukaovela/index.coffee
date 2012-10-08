@@ -96,9 +96,7 @@ class Bot
         return score
 
       attackScores = ({score: scoreAttack(attack), attack: attack} for attack in attacks)
-      console.log(attackScores)
       bestAttack = pickMax(attackScores, (a) -> a.score)
-      console.log(bestAttack)
 
       if bestAttack.score > bestAction.score
         bestAction = {
@@ -160,7 +158,7 @@ class Bot
 
       importantTiles = (scoreTile(tile) for tile in @game.getTiles(capturable: true))
       totalDistance = sum(importantTiles, (t) -> t.distance)
-      score = sum((t.score * totalDistance / t.distance) for t in importantTiles)
+      score = sum((t.score * totalDistance / t.distance) for t in importantTiles) / importantTiles.length
       score = 0.01 * score if score > 0 and not canCapture and neutralTile
       score = 0.01 * score if score > 0 and ownTile and buildTile
 
@@ -235,14 +233,12 @@ class BuildProfile
       weapon = weapons[weaponId]
       power = weapon?.powerMap[armorId]
       power = 0 if not power?
-      power = 2*power/3 if weapon?.requireDeployed
       return power
 
     getMaxPower = (attackerType, targetType) ->
       primaryPower = getPower(attackerType.primaryWeapon, targetType.armor)
       secondaryPower = getPower(attackerType.secondaryWeapon, targetType.armor)
       return if primaryPower > secondaryPower then primaryPower else secondaryPower
-
 
     getEfficiency = (attackerTypeId, targetTypeId) ->
       attackerType = unitTypes[attackerTypeId]
