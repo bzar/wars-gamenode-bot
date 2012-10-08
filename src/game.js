@@ -13,7 +13,28 @@ exports.Game = Game;
 Game.prototype.update = function(cb) {
   var that = this;
   this.client.stub.gameData(this.gameId, function(result) {
-    that.data = result.game;
+    var data = result.game;
+    var rules = that.rules;
+    that.data = data;
+
+    function setUnitType(unit) {
+      unit.unitType = rules.units[unit.type];
+      if(unit.carriedUnits !== undefined && unit.carriedUnits !== null) {
+        for(var i = 0; i < unit.carriedUnits.length; ++i) {
+          setUnitType(carriedUnits[i]);
+        }
+      }
+    }
+
+    for(var i = 0; i < data.tiles.length; ++i) {
+      var tile = data.tiles[i];
+      tile.terrain = rules.terrains[tile.type];
+
+      if(tile.unit !== undefined && tile.unit !== null) {
+        setUnitType(tile.unit)
+      }
+    }
+
     if(cb) cb(that.data);
   });
 }

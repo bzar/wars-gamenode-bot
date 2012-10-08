@@ -5,7 +5,11 @@ class Bot
   doTurn: ->
     console.log "doTurn"
     self = this
-    this.doUnit tile, tile.unit for tile in @game.getTiles(unitOwner: @playerNumber)
+
+    unitTiles = @game.getTiles(unitOwner: @playerNumber)
+    unitTiles.sort((a, b) -> b.unit.unitType.price - a.unit.unitType.price)
+    this.doUnit tile, tile.unit for tile in unitTiles
+
     buildTiles = @game.getTiles(canBuild: true, owner: @playerNumber, hasUnit: false)
     tileThreat = (tile) -> sum(self.evaluateThreats(tile), (t) -> t.threat)
     buildTilesWithThreats = ({tile: tile, threat: tileThreat(tile)} for tile in buildTiles)
@@ -54,17 +58,14 @@ class Bot
 
   findBestUnitAction: (unit, src, dst) ->
     console.log "findBestUnitAction"
-    unitType = @game.rules.units[unit.type]
-    dstTerrain = @game.rules.terrains[dst.type]
-    canCapture = @game.unitTypeHasFlag(unitType, "Capture")
+    canCapture = @game.unitTypeHasFlag(unit.unitType, "Capture")
     ownTile = dst.owner == @playerNumber
     neutralTile = dst.owner == 0
     enemyTile = not ownTile and not neutralTile
-    buildTile = @game.terrainCanBuild(dstTerrain)
+    buildTile = @game.terrainCanBuild(dst.terrain)
     attacks = @game.logic.unitAttackOptions(src.x, src.y, dst.x, dst.y)
 
     bestAction = {score: -Infinity}
-
 
     if @game.logic.unitCanCapture(src.x, src.y, dst.x, dst.y)
       toCapture = @game.getTile(src.x, src.y)
@@ -78,16 +79,33 @@ class Bot
         }
 
     if attacks? and attacks.length > 0
-      bestAttack = pickMax(attacks, (a) -> a.power)
-      targetUnit = @game.getTile(bestAttack.pos.x, bestAttack.pos.y).unit
-      targetUnitType = @game.rules.units[targetUnit.type]
-      score = bestAttack.power * targetUnitType.price
-      if score > bestAction.score
+      game = @game
+      playerNumber = @playerNumber
+      scoreAttack = (attack) ->
+        targetTile = game.getTile(attack.pos.x, attack.pos.y)
+        targetUnit = targetTile.unit
+        score = attack.power * targetUnit.unitType.price
+        score = score * 3 if targetUnit.capturing
+        score = score * 2 if targetUnit.capturing and targetTile.owner == playerNumber
+        if attack.power < targetUnit.health
+          oldHealth = targetUnit.health
+          targetUnit.health -= attack.power
+          counterDamage = game.logic.calculateDamage(targetUnit, targetTile, unit, dst)
+          targetUnit.health = oldHealth
+          score = score - counterDamage * unit.unitType.price if counterDamage?
+        return score
+
+      attackScores = ({score: scoreAttack(attack), attack: attack} for attack in attacks)
+      console.log(attackScores)
+      bestAttack = pickMax(attackScores, (a) -> a.score)
+      console.log(bestAttack)
+
+      if bestAttack.score > bestAction.score
         bestAction = {
           score: score,
           dst: dst,
           action: "attack",
-          target: bestAttack.pos
+          target: bestAttack.attack.pos
         }
 
 
@@ -95,6 +113,7 @@ class Bot
       unit.deployed = true
       potentialAttacks = @game.logic.unitAttackOptions(src.x, src.y, dst.x, dst.y).length
       if potentialAttacks > 0
+        score = potentialAttacks
         if buildTile and not neutralTile
           score += if ownTile then -2000 else 2000
 
@@ -131,11 +150,10 @@ class Bot
       playerNumber = @playerNumber
 
       scoreTile = (tile) ->
-        terrain = game.rules.terrains[tile.type]
         score = if tile.owner == playerNumber and (not tile.unit? or tile.unit.owner == playerNumber) then -10 else 10
         score *= if tile.unit? and tile.unit.owner == playerNumber and tile.beingCaptured then 0 else 1
         score = score * 2 if tile.owner == 0 and canCapture
-        score = score * 2 if game.terrainCanBuild(terrain)
+        score = score * 2 if game.terrainCanBuild(tile.terrain)
         distance = game.logic.getDistance(tile.x, tile.y, dst.x, dst.y)
         distance = 1 if distance == 0
         return {tile: tile, distance: distance, score: score}
@@ -246,4 +264,5 @@ class BuildProfile
     #  do (e) ->
     #    console.log unitTypes[e.unitTypeId].name + ";" + (eff.efficiency for eff in e.efficiencies).join(";")
     #
+
   getEfficiencies: (unitTypeId) -> (e.efficiencies for e in @efficiencies when e.unitTypeId is unitTypeId)[0]
