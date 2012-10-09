@@ -4,32 +4,31 @@ class Bot
 
   doTurn: ->
     console.log "doTurn"
-    self = this
 
     unitTiles = @game.getTiles(unitOwner: @playerNumber)
     unitTiles.sort((a, b) -> b.unit.unitType.price - a.unit.unitType.price)
-    this.doUnit tile, tile.unit for tile in unitTiles
+    @doUnit tile, tile.unit for tile in unitTiles
 
     buildTiles = @game.getTiles(canBuild: true, owner: @playerNumber, hasUnit: false)
-    tileThreat = (tile) -> sum(self.evaluateThreats(tile), (t) -> t.threat)
+    tileThreat = (tile) => sum(@evaluateThreats(tile), (t) -> t.threat)
     buildTilesWithThreats = ({tile: tile, threat: tileThreat(tile)} for tile in buildTiles)
     buildTilesWithThreats.sort((a, b) -> b.threat - a.threat)
-    this.doBuild t.tile for t in buildTilesWithThreats
+    @doBuild t.tile for t in buildTilesWithThreats
 
     @game.endTurn()
 
   doUnit: (tile, unit) ->
     console.log "doUnit"
     destinations = (@game.getTile(o.pos.x, o.pos.y) for o in @game.logic.unitMovementOptions(tile.x, tile.y))
-    actions = (this.findBestUnitAction(unit, tile, destination) for destination in destinations)
+    actions = (@findBestUnitAction(unit, tile, destination) for destination in destinations)
     actionsWithoutMoves = (a for a in actions when a.action != "move")
     actions = actionsWithoutMoves if actionsWithoutMoves.length > 0
     action = pickMax(actions, (a) -> a.score)
-    this.performUnitAction(unit, tile, action)
+    @performUnitAction(unit, tile, action)
 
   doBuild: (tile) ->
     console.log "doBuild"
-    threats = this.evaluateThreats(tile)
+    threats = @evaluateThreats(tile)
     buildOptions = @game.logic.tileBuildOptions(tile.x, tile.y)
     potentialUnits = (t.id for t in buildOptions when t.price <= @game.currentPlayer().funds)
 
@@ -48,11 +47,10 @@ class Bot
   evaluateThreats: (targetTile) ->
     console.log "evaluateThreats"
     threats = {}
-    game = @game
     for tile in @game.getTiles(notUnitOwner: @playerNumber)
-      do (tile) ->
+      do (tile) =>
         threats[tile.unit.type] = 0 if not threats[tile.unit.type]?
-        threats[tile.unit.type] += 1 / game.logic.getDistance(targetTile.x, targetTile.y, tile.x, tile.y)
+        threats[tile.unit.type] += 1 / @game.logic.getDistance(targetTile.x, targetTile.y, tile.x, tile.y)
 
     return threats
 
@@ -79,18 +77,16 @@ class Bot
         }
 
     if attacks? and attacks.length > 0
-      game = @game
-      playerNumber = @playerNumber
-      scoreAttack = (attack) ->
-        targetTile = game.getTile(attack.pos.x, attack.pos.y)
+      scoreAttack = (attack) =>
+        targetTile = @game.getTile(attack.pos.x, attack.pos.y)
         targetUnit = targetTile.unit
         score = attack.power * targetUnit.unitType.price
         score = score * 3 if targetUnit.capturing
-        score = score * 2 if targetUnit.capturing and targetTile.owner == playerNumber
+        score = score * 2 if targetUnit.capturing and targetTile.owner == @playerNumber
         if attack.power < targetUnit.health
           oldHealth = targetUnit.health
           targetUnit.health -= attack.power
-          counterDamage = game.logic.calculateDamage(targetUnit, targetTile, unit, dst)
+          counterDamage = @game.logic.calculateDamage(targetUnit, targetTile, unit, dst)
           targetUnit.health = oldHealth
           score = score - counterDamage * unit.unitType.price if counterDamage?
         return score
@@ -144,15 +140,12 @@ class Bot
     ###
 
     if bestAction.score < 0
-      game = @game
-      playerNumber = @playerNumber
-
-      scoreTile = (tile) ->
-        score = if tile.owner == playerNumber and (not tile.unit? or tile.unit.owner == playerNumber) then -10 else 10
-        score *= if tile.unit? and tile.unit.owner == playerNumber and tile.beingCaptured then 0 else 1
+      scoreTile = (tile) =>
+        score = if tile.owner == @playerNumber and (not tile.unit? or tile.unit.owner == @playerNumber) then -10 else 10
+        score *= if tile.unit? and tile.unit.owner == @playerNumber and tile.beingCaptured then 0 else 1
         score = score * 2 if tile.owner == 0 and canCapture
-        score = score * 2 if game.terrainCanBuild(tile.terrain)
-        distance = game.logic.getDistance(tile.x, tile.y, dst.x, dst.y)
+        score = score * 2 if @game.terrainCanBuild(tile.terrain)
+        distance = @game.logic.getDistance(tile.x, tile.y, dst.x, dst.y)
         distance = 1 if distance == 0
         return {tile: tile, distance: distance, score: score}
 
@@ -226,23 +219,20 @@ pickWeightedRandom = (values, weightingFunction) ->
 
 class BuildProfile
   constructor: (@game) ->
-    unitTypes = @game.rules.units
-    weapons = @game.rules.weapons
-
-    getPower = (weaponId, armorId) ->
-      weapon = weapons[weaponId]
+    getPower = (weaponId, armorId) =>
+      weapon = @game.rules.weapons[weaponId]
       power = weapon?.powerMap[armorId]
       power = 0 if not power?
       return power
 
-    getMaxPower = (attackerType, targetType) ->
+    getMaxPower = (attackerType, targetType) =>
       primaryPower = getPower(attackerType.primaryWeapon, targetType.armor)
       secondaryPower = getPower(attackerType.secondaryWeapon, targetType.armor)
       return if primaryPower > secondaryPower then primaryPower else secondaryPower
 
-    getEfficiency = (attackerTypeId, targetTypeId) ->
-      attackerType = unitTypes[attackerTypeId]
-      targetType = unitTypes[targetTypeId]
+    getEfficiency = (attackerTypeId, targetTypeId) =>
+      attackerType = @game.rules.units[attackerTypeId]
+      targetType = @game.rules.units[targetTypeId]
 
       attackerPower = getMaxPower(attackerType, targetType)
       targetPower = getMaxPower(targetType, attackerType)
@@ -250,15 +240,15 @@ class BuildProfile
 
       return (attackerPower * targetType.price) / (targetPower * attackerType.price)
 
-    getEfficienciesAgainst = (targetTypeId) ->
-      ({unitTypeId: parseInt(attackerTypeId), efficiency: getEfficiency(attackerTypeId, targetTypeId)} for attackerTypeId of unitTypes)
+    getEfficienciesAgainst = (targetTypeId) =>
+      ({unitTypeId: parseInt(attackerTypeId), efficiency: getEfficiency(attackerTypeId, targetTypeId)} for attackerTypeId of @game.rules.units)
 
-    @efficiencies = ({unitTypeId: unitTypeId, efficiencies: getEfficienciesAgainst(unitTypeId)} for unitTypeId of unitTypes)
+    @efficiencies = ({unitTypeId: unitTypeId, efficiencies: getEfficienciesAgainst(unitTypeId)} for unitTypeId of @game.rules.units)
 
-    #console.log ";" + (unitTypes[e.unitTypeId].name for e in @efficiencies).join(";")
+    #console.log ";" + (@game.rules.units[e.unitTypeId].name for e in @efficiencies).join(";")
     #for e in @efficiencies
-    #  do (e) ->
-    #    console.log unitTypes[e.unitTypeId].name + ";" + (eff.efficiency for eff in e.efficiencies).join(";")
+    #  do (e) =>
+    #    console.log @game.rules.units[e.unitTypeId].name + ";" + (eff.efficiency for eff in e.efficiencies).join(";")
     #
 
   getEfficiencies: (unitTypeId) -> (e.efficiencies for e in @efficiencies when e.unitTypeId is unitTypeId)[0]
