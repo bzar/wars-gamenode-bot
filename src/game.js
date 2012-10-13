@@ -124,6 +124,10 @@ Game.prototype.getTiles = function(conditions) {
       continue;
     }
 
+    if(conditions.notUnitOwnerOrNoUnit !== undefined && (tile.unit !== null && tile.unit.owner === conditions.notUnitOwner)) {
+      continue;
+    }
+
     result.push(tile);
   }
 

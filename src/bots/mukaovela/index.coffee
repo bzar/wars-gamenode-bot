@@ -23,6 +23,7 @@ class Bot
     actions = (@findBestUnitAction(unit, tile, destination) for destination in destinations)
     actionsWithoutMoves = (a for a in actions when a.action != "move")
     actions = actionsWithoutMoves if actionsWithoutMoves.length > 0
+    console.log actions
     action = pickMax(actions, (a) -> a.score)
     @performUnitAction(unit, tile, action)
 
@@ -57,13 +58,14 @@ class Bot
   findBestUnitAction: (unit, src, dst) ->
     console.log "findBestUnitAction"
     canCapture = @game.unitTypeHasFlag(unit.unitType, "Capture")
+    capturable = @game.terrainHasFlag(dst.terrain, "Capturable")
     ownTile = dst.owner == @playerNumber
     neutralTile = dst.owner == 0
     enemyTile = not ownTile and not neutralTile
     buildTile = @game.terrainCanBuild(dst.terrain)
     attacks = @game.logic.unitAttackOptions(src.x, src.y, dst.x, dst.y)
 
-    bestAction = {score: -Infinity}
+    bestAction = {action: "nothing", score: -Infinity}
 
     if @game.logic.unitCanCapture(src.x, src.y, dst.x, dst.y)
       toCapture = @game.getTile(src.x, src.y)
@@ -140,20 +142,41 @@ class Bot
     ###
 
     if bestAction.score < 0
-      scoreTile = (tile) =>
-        score = if tile.owner == @playerNumber and (not tile.unit? or tile.unit.owner == @playerNumber) then -10 else 10
-        score *= if tile.unit? and tile.unit.owner == @playerNumber and tile.beingCaptured then 0 else 1
-        score = score * 2 if tile.owner == 0 and canCapture
-        score = score * 2 if @game.terrainCanBuild(tile.terrain)
-        distance = @game.logic.getDistance(tile.x, tile.y, dst.x, dst.y)
-        distance = 1 if distance == 0
-        return {tile: tile, distance: distance, score: score}
+      scoreTile = (t) =>
+        score = 100
+        tIsCapturable = @game.terrainHasFlag(t.terrain, "Capturable")
+        score = 0 if t.unit? and t.unit.owner == @playerNumber and t.beingCaptured
+        score = score * 2 if tIsCapturable and t.owner == 0 and canCapture
+        score = score * 2 if tIsCapturable and t.owner != @playerNumber and canCapture
+        score = score * 2 if tIsCapturable and @game.terrainCanBuild(t.terrain)
 
-      importantTiles = (scoreTile(tile) for tile in @game.getTiles(capturable: true))
-      totalDistance = sum(importantTiles, (t) -> t.distance)
-      score = sum((t.score * totalDistance / t.distance) for t in importantTiles) / importantTiles.length
-      score = 0.01 * score if score > 0 and not canCapture and neutralTile
-      score = 0.01 * score if score > 0 and ownTile and buildTile
+        path = @game.logic.getPath(unit.unitType.movementType, unit.owner, t.x, t.y, dst.x, dst.y, unit.unitType.movement, undefined, true)
+        distance = if path then path[path.length - 1].cost else null
+        distance = 1 if distance == 0
+        return {tile: t, distance: distance, score: score}
+
+      importantTiles = @game.getTiles(owner: @playerNumber, notUnitOwner: @playerNumber)
+
+      if importantTiles.length < 5
+        importantTiles = importantTiles.concat(@game.getTiles(capturable: true, notOwner: @playerNumber, notUnitOwnerOrNoUnit: @playerNumber))
+
+      if importantTiles.length < 5
+        importantTiles = importantTiles.concat(@game.getTiles(notUnitOwner: @playerNumber))
+
+      importantTiles = ({tile: tile, distance: @game.logic.getDistance(tile.x, tile.y, dst.x, dst.y)} for tile in importantTiles)
+      importantTiles.sort((a, b) -> a.distance - b.distance)
+      importantTiles = importantTiles[..4];
+
+      scoredTiles = (scoreTile(t.tile) for t in importantTiles)
+      scoredTiles = (tile for tile in scoredTiles when tile.distance != null)
+      score = 0
+      if scoredTiles.length > 0
+        totalDistance = sum(scoredTiles, (t) -> t.distance)
+        score = sum((t.score / t.distance for t in scoredTiles)) / scoredTiles.length
+        if (not canCapture) and neutralTile and capturable
+          score = (if score > 0 then 0.01 else 100) * score
+        if ownTile and buildTile
+          score = (if score > 0 then 0.01 else 100) * score
 
       if score > bestAction.score
         bestAction = {
@@ -161,7 +184,6 @@ class Bot
           action: "move",
           dst: dst
         }
-
 
     return bestAction
 
