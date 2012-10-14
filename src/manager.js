@@ -48,7 +48,13 @@ Manager.prototype.gameFinished = function(gameId) {
     handler.gameFinished();
   });
 
-  this.client.stub.leaveGame(gameId);
+  this.client.stub.leaveGame(gameId, null, function(result) {
+    if(result.success) {
+      console.log("Left game " + gameId);
+    } else {
+      console.log("Error leaving game " + gameId + "! " + result.reason);
+    }
+  });
 }
 
 Manager.prototype.gameTurnChange = function(gameId, newTurn, newRound, turnRemaining) {
