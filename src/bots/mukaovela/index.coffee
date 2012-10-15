@@ -3,14 +3,12 @@ class Bot
     @buildProfile = new BuildProfile(@game)
 
   doTurn: ->
-    console.log "doTurn"
-
     unitTiles = @game.getTiles(unitOwner: @playerNumber)
     unitTiles.sort((a, b) -> b.unit.unitType.price - a.unit.unitType.price)
     @doUnit tile, tile.unit for tile in unitTiles
 
     buildTiles = @game.getTiles(canBuild: true, owner: @playerNumber, hasUnit: false)
-    tileThreat = (tile) => sum(@evaluateThreats(tile), (t) -> t.threat)
+    tileThreat = (tile) => sum((v for k, v of @evaluateThreats(tile)), (t) -> t)
     buildTilesWithThreats = ({tile: tile, threat: tileThreat(tile)} for tile in buildTiles)
     buildTilesWithThreats.sort((a, b) -> b.threat - a.threat)
     @doBuild t.tile for t in buildTilesWithThreats
@@ -18,17 +16,14 @@ class Bot
     @game.endTurn()
 
   doUnit: (tile, unit) ->
-    console.log "doUnit"
     destinations = (@game.getTile(o.pos.x, o.pos.y) for o in @game.logic.unitMovementOptions(tile.x, tile.y))
     actions = (@findBestUnitAction(unit, tile, destination) for destination in destinations)
     actionsWithoutMoves = (a for a in actions when a.action != "move")
     actions = actionsWithoutMoves if actionsWithoutMoves.length > 0
-    console.log actions
     action = pickMax(actions, (a) -> a.score)
     @performUnitAction(unit, tile, action)
 
   doBuild: (tile) ->
-    console.log "doBuild"
     threats = @evaluateThreats(tile)
     buildOptions = @game.logic.tileBuildOptions(tile.x, tile.y)
     potentialUnits = (t.id for t in buildOptions when t.price <= @game.currentPlayer().funds)
@@ -46,7 +41,6 @@ class Bot
 
 
   evaluateThreats: (targetTile) ->
-    console.log "evaluateThreats"
     threats = {}
     for tile in @game.getTiles(notUnitOwner: @playerNumber)
       do (tile) =>
@@ -56,7 +50,6 @@ class Bot
     return threats
 
   findBestUnitAction: (unit, src, dst) ->
-    console.log "findBestUnitAction"
     canCapture = @game.unitTypeHasFlag(unit.unitType, "Capture")
     capturable = @game.terrainHasFlag(dst.terrain, "Capturable")
     ownTile = dst.owner == @playerNumber
@@ -188,7 +181,6 @@ class Bot
     return bestAction
 
   performUnitAction: (unit, tile, action) ->
-    console.log "performUnitAction"
     switch action.action
       when "capture"  then @game.moveAndCapture(tile.x, tile.y, action.dst.x, action.dst.y)
       when "attack"   then @game.moveAndAttack(tile.x, tile.y, action.dst.x,action. dst.y, action.target.x, action.target.y)
