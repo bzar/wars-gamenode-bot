@@ -233,9 +233,21 @@ Game.prototype.moveAndCapture = function(x, y, dx, dy) {
   dst.unit.capturing = true;
   dst.capturePoints -= dst.unit.health;
   if(dst.capturePoints <= 0) {
+    var previousOwner = dst.owner;
     dst.owner = dst.unit.owner;
     dst.capturePoints = 1;
     dst.beingCaptured = false;
+    if(this.terrainHasFlag(this.rules.terrains[dst.type]), "HQ") {
+      for(var i = 0; i < this.data.tiles.length; ++i) {
+        var tile = this.data.tiles[i];
+        if(tile.unit !== null && tile.unit.owner === previousOwner) {
+          tile.unit.owner = 0;
+        }
+        if(tile.owner === previousOwner) {
+          tile.owner = 0;
+        }
+      }
+    }
   } else {
     dst.beingCaptured = true;
   }
