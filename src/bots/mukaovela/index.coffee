@@ -78,6 +78,7 @@ class Bot
         score = attack.power * targetUnit.unitType.price
         score = score * 3 if targetUnit.capturing
         score = score * 2 if targetUnit.capturing and targetTile.owner == @playerNumber
+        score = score * 2 if canCapture
         if attack.power < targetUnit.health
           oldHealth = targetUnit.health
           targetUnit.health -= attack.power

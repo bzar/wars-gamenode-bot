@@ -237,14 +237,25 @@ Game.prototype.moveAndCapture = function(x, y, dx, dy) {
     dst.owner = dst.unit.owner;
     dst.capturePoints = 1;
     dst.beingCaptured = false;
-    if(this.terrainHasFlag(this.rules.terrains[dst.type]), "HQ") {
+    if(this.terrainHasFlag(this.rules.terrains[dst.type], "HQ") && previousOwner !== 0) {
+      var lastHQ = true;
       for(var i = 0; i < this.data.tiles.length; ++i) {
         var tile = this.data.tiles[i];
-        if(tile.unit !== null && tile.unit.owner === previousOwner) {
-          tile.unit.owner = 0;
+        if(tile.owner === previousOwner && this.terrainHasFlag(this.rules.terrains[tile.type], "HQ")) {
+          lastHQ = false;
+          break;
         }
-        if(tile.owner === previousOwner) {
-          tile.owner = 0;
+      }
+      
+      if(lastHQ) {
+        for(var i = 0; i < this.data.tiles.length; ++i) {
+          var tile = this.data.tiles[i];
+          if(tile.unit !== null && tile.unit.owner === previousOwner) {
+            tile.unit.owner = 0;
+          }
+          if(tile.owner === previousOwner) {
+            tile.owner = 0;
+          }
         }
       }
     }
