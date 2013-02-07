@@ -52,7 +52,7 @@ class Bot
   findBestUnitAction: (unit, src, dst) ->
     canCapture = @game.unitTypeHasFlag(unit.unitType, "Capture")
     capturable = @game.terrainHasFlag(dst.terrain, "Capturable")
-    ownTile = dst.owner == @playerNumber
+    ownTile = @game.logic.areAllies(dst.owner, @playerNumber)
     neutralTile = dst.owner == 0
     enemyTile = not ownTile and not neutralTile
     buildTile = @game.terrainCanBuild(dst.terrain)
@@ -141,7 +141,7 @@ class Bot
         tIsCapturable = @game.terrainHasFlag(t.terrain, "Capturable")
         score = 0 if t.unit? and t.unit.owner == @playerNumber and t.beingCaptured
         score = score * 2 if tIsCapturable and t.owner == 0 and canCapture
-        score = score * 2 if tIsCapturable and t.owner != @playerNumber and canCapture
+        score = score * 2 if tIsCapturable and @game.logic.areEnemies(t.owner, @playerNumber) and canCapture
         score = score * 2 if tIsCapturable and @game.terrainCanBuild(t.terrain)
 
         path = @game.logic.getPath(unit.unitType.movementType, unit.owner, t.x, t.y, dst.x, dst.y, unit.unitType.movement, undefined, true)
@@ -149,13 +149,13 @@ class Bot
         distance = 1 if distance == 0
         return {tile: t, distance: distance, score: score}
 
-      importantTiles = @game.getTiles(owner: @playerNumber, notUnitOwner: @playerNumber)
+      importantTiles = @game.getTiles(alliedTo: @playerNumber, hasUnit: true, unitEnemyOf: @playerNumber)
 
       if importantTiles.length < 5
-        importantTiles = importantTiles.concat(@game.getTiles(capturable: true, notOwner: @playerNumber, notUnitOwnerOrNoUnit: @playerNumber))
+        importantTiles = importantTiles.concat(@game.getTiles(capturable: true, enemyOf: @playerNumber, unitEnemyOfOrNoUnit: @playerNumber))
 
       if importantTiles.length < 5
-        importantTiles = importantTiles.concat(@game.getTiles(notUnitOwner: @playerNumber))
+        importantTiles = importantTiles.concat(@game.getTiles(unitEnemyOf: @playerNumber))
 
       importantTiles = ({tile: tile, distance: @game.logic.getDistance(tile.x, tile.y, dst.x, dst.y)} for tile in importantTiles)
       importantTiles.sort((a, b) -> a.distance - b.distance)

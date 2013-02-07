@@ -49,14 +49,21 @@ Game::getTiles = (conditions) ->
 
   for tile in @data.tiles
     terrain = @rules.terrains[tile.type]
+    continue  if conditions.hasUnit? and conditions.hasUnit isnt (tile.unit isnt null)
     continue  if conditions.canBuild? and (terrain.buildTypes.length isnt 0) isnt conditions.canBuild
     continue  if conditions.owner? and tile.owner isnt conditions.owner
     continue  if conditions.notOwner? and tile.owner is conditions.notOwner
+    continue  if conditions.alliedTo? and not @logic.areAllies(tile.owner, conditions.alliedTo)
+    continue  if conditions.enemyOf? and not @logic.areEnemies(tile.owner, conditions.enemyOf)
     continue  if conditions.capturable? and @terrainHasFlag(terrain, "Capturable") isnt conditions.capturable
     continue  if conditions.hasUnit? and (tile.unit isnt null) isnt conditions.hasUnit
     continue  if conditions.unitOwner? and (tile.unit is null or tile.unit.owner isnt conditions.unitOwner)
     continue  if conditions.notUnitOwner? and (tile.unit is null or tile.unit.owner is conditions.notUnitOwner)
     continue  if conditions.notUnitOwnerOrNoUnit? and (tile.unit isnt null and tile.unit.owner is conditions.notUnitOwner)
+    continue  if conditions.unitAlliedTo? and (tile.unit is null or not @logic.areAllies(tile.unit.owner, conditions.unitAlliedTo))
+    continue  if conditions.unitEnemyOf? and (tile.unit is null or not @logic.areEnemies(tile.unit.owner, conditions.unitEnemyOf))
+    continue  if conditions.unitAlliedToOrNoUnit? and (tile.unit isnt null and not @logic.areAllies(tile.unit.owner, conditions.unitAlliedTo))
+    continue  if conditions.unitEnemyOfOrNoUnit? and (tile.unit isnt null and not @logic.areEnemies(tile.unit.owner, conditions.unitEnemyOf))
     result.push tile
 
   return result
