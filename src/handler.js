@@ -10,8 +10,6 @@ function Handler(client, gameId, playerNumber) {
   this.game = null;
 
   var that = this;
-
-
   client.stub.subscribeGame(gameId, function() {
     client.stub.gameRules(gameId, function(rules) {
       that.game = new Game(client, gameId, rules);
